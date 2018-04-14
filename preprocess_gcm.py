@@ -1,21 +1,14 @@
 """
-climate indices from http://etccdi.pacificclimate.org/list_27_indices.shtml
+script to preprocess GCM data for use in spatiotemporal image processing networks
 """
 from os.path import join
 
 import xarray as xr
-from xarray.ufuncs import isfinite
 import pandas as pd 
-from matplotlib import pyplot as plt 
 import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline, RegularGridInterpolator
-from shapely.geometry import Point, mapping
-from fiona import collection
-from statsmodels.distributions.empirical_distribution import ECDF
 import dask
-from dask.distributed import Client
 from PIL import Image
-# client = Client()
 
 
 def map_360_to_365_day_calendar(date_strings):
@@ -89,7 +82,8 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
         save as a .csv file that can be read into a pandas DataFrame
 
     write_images:
-        open preprocessed netcdf files contain
+        open preprocessed netcdf files containing regridded anomaly data.
+        write each timestep to an individual image file 
     """
     ## SETTINGS
     grid_nc = 'GCMs/MPI-ESM-LR/piControl/tas_Amon_MPI-ESM-LR_piControl_r1i1p1_185001-203512.nc'
