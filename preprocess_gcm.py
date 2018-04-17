@@ -99,11 +99,12 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
     }
     ## these are the variables to work with
     channels = ['tas']
-    ## variable for the target
+    ## variable, latitude range, and longitude range for the target 
+    # https://www.climate.gov/news-features/blogs/enso/why-are-there-so-many-enso-indexes-instead-just-one
+    target_name = 'NINO_3-4'
     target_var = 'tas'
-    ## lower left and upper right [lon, lat] for the target 
-    target_ll = []
-    target_ur = []
+    lat_range = [-5, 5]
+    lon_range = [190, 240] # be careful of crossing the date line
     ## interpolate onto common grid and calculate anomalies
     if preprocess_netcdfs:
         print("Preprocessing NetCDF Data")
@@ -112,7 +113,7 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
             Y, X = np.meshgrid(grid_ds.lat, grid_ds.lon)
             xi = np.asarray([Y.flatten(), X.flatten()]).T
             ## name for regridded files
-            rg_fstr = '{}_Amon_{}_{}_{}_{}_%sx%s.nc' % (str(X.shape[0]), str(X.shape[1]))
+            rg_fstr = '{}_Amon_{}_{}_{}_{}_%sx%s_anomalies.nc' % (str(X.shape[0]), str(X.shape[1]))
             for gcm_name in gcm_names:
                 for scenario in scenarios[gcm_name]:
                     ## path for gcm files
@@ -135,8 +136,8 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
                             ss = np.zeros(gcm[var][:12,:,:].shape, dtype=np.float64)
                             ## compute anomalies by removing mean for each location for each month
                             for m in range(1, 13):
-                                print('\nComputing anomalies for month', m)
-                                ## compute the mean value for each month (note this is an expensive step)
+                                print('Computing anomalies for month', m)
+                                ## compute the mean value for each month
                                 ss[m-1,:,:] = gcm[var][dr.month == m,:,:].mean(dim='time')
                             ## iterate in 100 year chunks to keep new .nc file sizes under control
                             for y0, y1 in zip(year_range[:-1], year_range[1:]):
@@ -178,7 +179,22 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
         print('\nFinished Interpolating')
     ## calculate a timeseries to use as a response variable
     if generate_target:
-        pass
+        print('\nCalculating', target_name)
+        ## loop over GCMs and scenarios
+        for gcm_name in gcm_names:
+            for scenario in scenarios[gcm_name]:
+                print(gcm_name, scenario)
+                # gcm_path = join(data_dir, 'GCMs', gcm_name, scenario, '*.nc')
+                gcm_path = join(data_dir, 'GCMs', gcm_name, scenario, 'regrid_anomalies', '*.nc')
+                with xr.open_mfdataset(gcm_path) as gcm:    
+                    ## get spatial subset for variable
+                    gcm_sub = gcm[target_var].sel(lon=slice(*lon_range), lat=slice(*lat_range))
+                    ## calculate spatial mean
+                    y = gcm_sub.mean(dim=['lon', 'lat'])
+                    fname = '{}_{}_{}.csv'.format(gcm_name, scenario, target_name)
+                    fp = join(data_dir, 'GCMs', gcm_name, scenario, fname)
+                    y.to_dataframe().to_csv(fp)
+        print('\nFinished computing {}'.format(target_name))
     ## Save each month's data as an individual file
     if write_images:
         print('\nWriting {} files'.format(img_ext))
@@ -226,5 +242,5 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
 
 
 if __name__ == '__main__':
-    main(data_dir='.', write_images=True, preprocess_netcdfs=True)
+    main(data_dir='.', write_images=True, generate_target=True, preprocess_netcdfs=True)
 
