@@ -1,5 +1,18 @@
 """
 script to preprocess GCM data for use in spatiotemporal image processing networks
+
+file structure
+|-- data_dir
+|---- `GCMs`
+|------ `gcm_name`
+|-------- `scenario`
+        | netcdf files
+|---------- `regrid_anomalies`
+          | netcdf files 
+|---- `img`
+|------ `gcm_name`
+|-------- `scenario`
+        | image files
 """
 from os.path import join, split
 
@@ -67,7 +80,7 @@ def map_360_to_365_day_calendar(date_strings):
 
 
 def main(data_dir='.', preprocess_netcdfs=False, write_images=True, 
-         generate_target=False, img_ext='npy', img_type=np.uint32):
+         generate_target=False, img_ext='npy', img_type=np.float32):
     """
     script with three gcm preprocessing functionalities
 
@@ -85,6 +98,14 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
     write_images:
         open preprocessed netcdf files containing regridded anomaly data.
         write each timestep to an individual image file 
+
+    img_ext:
+        'npy' to save as serialized numpy arrays
+        'jpg' to save as jpeg image files
+
+    img_type:
+        type to save data in output img files. 
+        if np.uint8 or np.uint32 will trigger scaling of raw data
     """
     ##############
     ## SETTINGS ##
