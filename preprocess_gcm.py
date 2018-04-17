@@ -92,13 +92,13 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
     ## path to the .nc file whose grid we will interpolate onto 
     grid_nc = 'GCMs/MPI-ESM-LR/piControl/tas_Amon_MPI-ESM-LR_piControl_r1i1p1_185001-203512.nc'
     ## these are the GCMs to preprocess
-    gcm_names = ['CNRM-CM5']#, 'CanESM2', 'HadGEM2-ES', 'MPI-ESM-LR',]
+    gcm_names = ['CNRM-CM5', 'MPI-ESM-LR']#, 'CanESM2', 'HadGEM2-ES',]
     ## these are the experiments and forcings settings for each gcm
     scenarios = {
         'CNRM-CM5': ['piControl_r1i1p1'],
     }
     ## these are the variables to work with
-    channels = ['tas']
+    channels = ['tas', 'psl']
     ## variable, latitude range, and longitude range for the target 
     # https://www.climate.gov/news-features/blogs/enso/why-are-there-so-many-enso-indexes-instead-just-one
     target_name = 'NINO_3-4'
