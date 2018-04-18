@@ -2,17 +2,17 @@
 script to preprocess GCM data for use in spatiotemporal image processing networks
 
 file structure
-|-- data_dir
-|---- `GCMs`
-|------ `gcm_name`
-|-------- `scenario`
-        | netcdf files
-|---------- `regrid_anomalies`
-          | netcdf files 
-|---- `img`
-|------ `gcm_name`
-|-------- `scenario`
-        | image files
+| data_dir
+|-- `GCMs`
+|---- `gcm_name`
+|------ `scenario`
+       | netcdf files
+|-------- `regrid_anomalies`
+         | netcdf files 
+|-- `img`
+|---- `gcm_name`
+|------ `scenario`
+       | image files
 """
 from os.path import join, split
 
@@ -121,11 +121,17 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
     ## these are the variables to work with
     channels = ['tas', 'psl']
     ## variable, latitude range, and longitude range for the target 
-    # https://www.climate.gov/news-features/blogs/enso/why-are-there-so-many-enso-indexes-instead-just-one
+    ## Nino3.4 index 
+    ## https://www.climate.gov/news-features/blogs/enso/why-are-there-so-many-enso-indexes-instead-just-one
     target_name = 'NINO_3-4'
     target_var = 'tas'
     lat_range = [-5, 5]
     lon_range = [190, 240] # be careful of crossing the date line
+    ## precipitation over India
+    # target_name = 'India_precip'
+    # target_var = 'pr'
+    # lat_range = [10, 25]
+    # lon_range = [70, 90]
     ## interpolate onto common grid and calculate anomalies
     if preprocess_netcdfs:
         print("Preprocessing NetCDF Data")
