@@ -4,8 +4,8 @@ script to preprocess GCM data for use in spatiotemporal image processing network
 file structure
     | `data_dir`
     |-- GCMs
-    |---- gcm_name
-    |------ scenario
+    |---- `gcm_name`
+    |------ `scenario`
     |-------- raw
     |-------- regrid_anomalies
     |-------- img

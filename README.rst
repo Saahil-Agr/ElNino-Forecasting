@@ -36,8 +36,8 @@ The script requires a specific file structure to work. The root directory, ``dat
 
     | `data_dir`
     |-- GCMs
-    |---- gcm_name
-    |------ scenario
+    |---- `gcm_name`
+    |------ `scenario`
     |-------- raw
     |-------- regrid_anomalies
     |-------- img
