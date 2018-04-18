@@ -2,17 +2,13 @@
 script to preprocess GCM data for use in spatiotemporal image processing networks
 
 file structure
-| data_dir
-|-- `GCMs`
-|---- `gcm_name`
-|------ `scenario`
-       | netcdf files
-|-------- `regrid_anomalies`
-         | netcdf files 
-|-- `img`
-|---- `gcm_name`
-|------ `scenario`
-       | image files
+    | data_dir
+    |-- `GCMs`
+    |---- `gcm_name`
+    |------ `scenario`
+    |-------- `raw`
+    |-------- `regrid_anomalies`
+    |-------- `img`
 """
 from os.path import join, split
 
@@ -79,59 +75,77 @@ def map_360_to_365_day_calendar(date_strings):
     return dr
 
 
-def main(data_dir='.', preprocess_netcdfs=False, write_images=True, 
-         generate_target=False, img_ext='npy', img_type=np.float32):
+def main(preprocess_netcdfs=False, 
+         generate_target=False, 
+         write_images=True, 
+         data_dir='.', 
+         grid_nc='', 
+         gcm_names=('CNRM-CM5',), 
+         scenarios={'CNRM-CM5': ('piControl_r1i1p1',)}, 
+         channels=('tas',), 
+         target=None,
+         img_ext='npy', 
+         img_type=np.float32):
     """
     script with three gcm preprocessing functionalities
 
     preprocess_netcdfs: 
+        bool, default False
         open netcdf files containing gcm output and interpolate onto chosen grid.
         remove seasonal mean climate from data to generate anomalies.
         save regridded anomalies by variable as a new set of netcdf files.
 
     generate_target:
+        bool, default False
         open preprocessed netcdf files containing regridded anomalies.
         given a bounding box and variable compute a timeseries of the spatial mean
         at each timestep. 
         save as a .csv file that can be read into a pandas DataFrame
 
     write_images:
+        bool, default True
         open preprocessed netcdf files containing regridded anomaly data.
         write each timestep to an individual image file 
 
+    data_dir:
+        string, default '.'
+        path to top level data directory
+
+    grid_nc:
+        string, default '',
+        path to netcdf file containing the target grid for interpolation,
+
+    gcm_names:
+        sequence, default ('CNRM-CM5',)
+        sequence of strings specifying names of GCMs to preprocess
+
+    scenarios:
+        dict, default {'CNRM-CM5': ('piControl_r1i1p1',)}
+        keys are string names of GCMs, values are sequences of strings 
+        specifying scenarios for this gcm
+
+    channels:
+        sequence, default ('tas',)
+        sequence of strings giving variables in climate model to analyze
+        the order of the variables in this sequence will be the order 
+        of the channels in the image files 
+
+    target:
+        None or ClimateTarget instance, default None
+        ClimateTarget instance specifying parameters for calculating 
+        response time series
+
     img_ext:
+        string, default 'npy'
         'npy' to save as serialized numpy arrays
         'jpg' to save as jpeg image files
 
     img_type:
+        data type, default np.float32
         type to save data in output img files. 
+        must be np.uint8 to save PIL jpgs
         if np.uint8 or np.uint32 will trigger scaling of raw data
     """
-    ##############
-    ## SETTINGS ##
-    ##############
-    ## path to the .nc file whose grid we will interpolate onto 
-    grid_nc = 'GCMs/MPI-ESM-LR/piControl/tas_Amon_MPI-ESM-LR_piControl_r1i1p1_185001-203512.nc'
-    ## these are the GCMs to preprocess
-    gcm_names = ['CNRM-CM5', 'MPI-ESM-LR']#, 'CanESM2', 'HadGEM2-ES',]
-    ## these are the experiments and forcings settings for each gcm
-    scenarios = {
-        'CNRM-CM5': ['piControl_r1i1p1'],
-    }
-    ## these are the variables to work with
-    channels = ['tas', 'psl']
-    ## variable, latitude range, and longitude range for the target 
-    ## Nino3.4 index 
-    ## https://www.climate.gov/news-features/blogs/enso/why-are-there-so-many-enso-indexes-instead-just-one
-    target_name = 'NINO_3-4'
-    target_var = 'tas'
-    lat_range = [-5, 5]
-    lon_range = [190, 240] # be careful of crossing the date line
-    ## precipitation over India
-    # target_name = 'India_precip'
-    # target_var = 'pr'
-    # lat_range = [10, 25]
-    # lon_range = [70, 90]
     ## interpolate onto common grid and calculate anomalies
     if preprocess_netcdfs:
         print("Preprocessing NetCDF Data")
@@ -144,8 +158,8 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
             for gcm_name in gcm_names:
                 for scenario in scenarios[gcm_name]:
                     ## path for gcm files
-                    gcm_path = join(data_dir, 'GCMs', gcm_name, scenario, '*.nc')
-                    with xr.open_mfdataset(gcm_path) as gcm:
+                    gcm_path = join(data_dir, 'GCMs', gcm_name, scenario)
+                    with xr.open_mfdataset(join(gcm_path, 'raw', '*.nc')) as gcm:
                         gcm_grid = (np.asarray(gcm.lat), np.asarray(gcm.lon))
                         # force gcm to 365 day calendar
                         date_strings = [str(d)[:10] for d in gcm.time.values]
@@ -200,28 +214,28 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
                                 sub_gcm.attrs = gcm.attrs
                                 ## path to write out file
                                 fname = rg_fstr.format(var, gcm_name, scenario, str(y0)[:7], str(y1)[:7])
-                                fp = join(split(gcm_path)[0], 'regrid_anomalies', fname)
+                                fp = join(gcm_path, 'regrid_anomalies', fname)
                                 ## save 100 years of regridded anomalies data as .nc file
                                 sub_gcm.to_netcdf(fp, mode='w', unlimited_dims=['time'])
         print('\nFinished Interpolating')
     ## calculate a timeseries to use as a response variable
     if generate_target:
-        print('\nCalculating', target_name)
+        print('\nCalculating', target.name)
         ## loop over GCMs and scenarios
         for gcm_name in gcm_names:
             for scenario in scenarios[gcm_name]:
                 print(gcm_name, scenario)
                 # gcm_path = join(data_dir, 'GCMs', gcm_name, scenario, '*.nc')
-                gcm_path = join(data_dir, 'GCMs', gcm_name, scenario, 'regrid_anomalies', '*.nc')
-                with xr.open_mfdataset(gcm_path) as gcm:    
+                gcm_path = join(data_dir, 'GCMs', gcm_name, scenario)
+                with xr.open_mfdataset(join(gcm_path, 'regrid_anomalies', '*.nc')) as gcm:    
                     ## get spatial subset for variable
-                    gcm_sub = gcm[target_var].sel(lon=slice(*lon_range), lat=slice(*lat_range))
+                    gcm_sub = gcm[target.var].sel(lon=slice(*target.lon_range), lat=slice(*target.lat_range))
                     ## calculate spatial mean
                     y = gcm_sub.mean(dim=['lon', 'lat'])
-                    fname = '{}_{}_{}.csv'.format(gcm_name, scenario, target_name)
-                    fp = join(data_dir, 'GCMs', gcm_name, scenario, fname)
+                    fname = '{}_{}_{}.csv'.format(gcm_name, scenario, target.name)
+                    fp = join(gcm_path, fname)
                     y.to_dataframe().to_csv(fp)
-        print('\nFinished computing {}'.format(target_name))
+        print('\nFinished computing {}'.format(target.name))
     ## Save each month's data as an individual file
     if write_images:
         print('\nWriting {} files'.format(img_ext))
@@ -237,8 +251,8 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
             for scenario in scenarios[gcm_name]:
                 print(gcm_name, scenario)
                 # gcm_path = join(data_dir, 'GCMs', gcm_name, scenario, '*.nc')
-                gcm_path = join(data_dir, 'GCMs', gcm_name, scenario, 'regrid_anomalies', '*.nc')
-                with xr.open_mfdataset(gcm_path) as gcm:
+                gcm_path = join(data_dir, 'GCMs', gcm_name, scenario)
+                with xr.open_mfdataset(join(gcm_path, 'regrid_anomalies', '*.nc')) as gcm:
                     ## if using an integer type, scale to full range of integer
                     if img_type in (np.uint8, np.uint32):
                         print('\nScaling channels')
@@ -256,18 +270,57 @@ def main(data_dir='.', preprocess_netcdfs=False, write_images=True,
                         ## stack channels together and specify data type, shape = (rows, cols, channels)
                         arr = np.stack(vals, axis=-1).astype(img_type)
                         name = img_fstr.format(gcm_name, scenario, str(t.values)[:7])
-                        path = join(data_dir, 'img', gcm_name, scenario, name)
+                        img_path = join(gcm_path, 'img', name)
                         ## .npy file format can take arbitrary color bands and pixel bits
                         if img_ext == 'npy':
-                            np.save(path, arr)
+                            np.save(img_path, arr)
                         ## .jpg with pillow can take 1, 3, or 4 color bands and 8 bits
                         elif img_ext == 'jpg' and len(channels) == 3:
-                            Image.fromarray(arr, mode='RGB').save(path)
+                            Image.fromarray(arr, mode='RGB').save(img_path)
                         elif img_ext == 'jpg' and len(channels) == 1:
-                            Image.fromarray(arr, mode='L').save(path)
+                            Image.fromarray(arr, mode='L').save(img_path)
         print('\nFinished writing {} files'.format(img_ext))
 
 
+class ClimateTarget:
+    """data structure for climate variable bounding box"""
+    def __init__(self, name, var, lat_range, lon_range):
+        """for lon_range be careful of crossing the date line """
+        self.name = name
+        self.var = var 
+        self.lat_range = lat_range
+        self.lon_range = lon_range
+
+
 if __name__ == '__main__':
-    main(data_dir='.', write_images=True, generate_target=True, preprocess_netcdfs=True)
+    ##############
+    ## SETTINGS ##
+    ##############
+    ## path to the .nc file whose grid we will interpolate onto (the GCM with the coarsest grid)
+    grid_nc = 'GCMs/MPI-ESM-LR/piControl/raw/tas_Amon_MPI-ESM-LR_piControl_r1i1p1_185001-203512.nc'
+    ## these are the GCMs to preprocess
+    gcm_names = ['CNRM-CM5']#, 'MPI-ESM-LR', 'CanESM2', 'HadGEM2-ES',]
+    ## these are the experiments and forcings settings for each gcm
+    scenarios = {
+        'CNRM-CM5': ('piControl_r1i1p1',),
+    }
+    ## these are the variables to work with
+    channels = ['tas', 'psl']
+    ## variable, latitude range, and longitude range for the target 
+    ## Nino3.4 index 
+    ## https://www.climate.gov/news-features/blogs/enso/why-are-there-so-many-enso-indexes-instead-just-one
+    target = ClimateTarget(name='NINO_3-4', var='tas', lat_range=[-5, 5], lon_range=[190, 240])
+    ## precipitation over India
+    # target = ClimateTarget(name='India_precip', var='pr', lat_range=[10, 25], lon_range=[70, 90])
+    main(
+        preprocess_netcdfs=True
+        generate_target=True, 
+        write_images=True, 
+        data_dir='.', 
+        grid_nc=grid_nc,
+        gcm_names=gcm_names,
+        scenarios=scenarios,
+        channels=channels,
+        target=target,
+    )
 
