@@ -34,14 +34,14 @@ The script requires a specific file structure to work. The root directory, ``dat
 
 .. code-block:: bash
 
-    | data_dir
-    |-- `GCMs`
-    |---- `gcm_name`
-    |------ `scenario`
-    |-------- `raw`
-    |-------- `regrid_anomalies`
-    |-------- `img`
+    | `data_dir`
+    |-- GCMs
+    |---- gcm_name
+    |------ scenario
+    |-------- raw
+    |-------- regrid_anomalies
+    |-------- img
 
 
- The script has several settings that can be changed. See the docstrings and comments in the script for details.
+The script has several settings that can be changed. See the docstrings and comments in the script for details.
 

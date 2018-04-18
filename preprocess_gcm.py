@@ -2,13 +2,13 @@
 script to preprocess GCM data for use in spatiotemporal image processing networks
 
 file structure
-    | data_dir
-    |-- `GCMs`
-    |---- `gcm_name`
-    |------ `scenario`
-    |-------- `raw`
-    |-------- `regrid_anomalies`
-    |-------- `img`
+    | `data_dir`
+    |-- GCMs
+    |---- gcm_name
+    |------ scenario
+    |-------- raw
+    |-------- regrid_anomalies
+    |-------- img
 """
 from os.path import join, split
 
