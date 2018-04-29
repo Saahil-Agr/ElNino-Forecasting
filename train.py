@@ -46,15 +46,20 @@ def train(model, optimizer, loss_fn, dataloader):
             # save each batch loss, this can be done also once in a while
             losses.append(loss.data[0])
 
-            # update the average loss
-            loss_avg = torch.mean(torch.FloatTensor(losses))
-            logging.info("- Train average loss : " + loss_avg)
-            # t.set_postfix(loss='{:05.3f}'.format(loss_avg()))
-            t.update()
+        # update the average loss
+        loss_avg = torch.mean(torch.FloatTensor(losses))
+        logging.info("- Train average loss : " + loss_avg)
+        # t.set_postfix(loss='{:05.3f}'.format(loss_avg()))
+        t.update()
+
+            return loss_avg
 
 
 def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_fn, model_dir, epochs,
                        restore_file=None):
+
+    train_losses = []
+    val_losses = []
 
     # reload weights from restore_file if specified
     if restore_file is not None:
@@ -62,20 +67,21 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
         logging.info("Restoring parameters from {}".format(restore_path))
         utils.load_checkpoint(restore_path, crnn_model, optimizer)
 
-    best_val_acc = 0.0
+    best_val_loss = float('inf')
 
     for epoch in range(epochs):
         # Run one epoch
         logging.info("Epoch {}/{}".format(epoch + 1, epochs))
 
         # compute number of batches in one epoch (one full pass over the training set)
-        train(model, optimizer, loss_fn, train_dataloader)
+        loss_avg_epoch = train(model, optimizer, loss_fn, train_dataloader)
+        train_losses.append(loss_avg_epoch)
 
         # Evaluate for one epoch on validation set
-        val_metrics = evaluate(model, loss_fn, val_dataloader)
+        val_loss_avg = evaluate(model, loss_fn, val_dataloader)
+        val_losses.append(val_loss_avg)
 
-        val_acc = val_metrics['accuracy']
-        is_best = val_acc >= best_val_acc
+        is_best = val_loss_avg <=  best_val_loss
 
         # Save weights
         utils.save_checkpoint({'epoch': epoch + 1,
@@ -87,15 +93,15 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
         # If best_eval, best_save_path
         if is_best:
             logging.info("- Found new best accuracy")
-            best_val_acc = val_acc
+            best_val_ = val_loss_avg
 
             # Save best val metrics in a json file in the model directory
             best_json_path = os.path.join(model_dir, "metrics_val_best_weights.json")
-            utils.save_dict_to_json(val_metrics, best_json_path)
+            utils.save_dict_to_json(val_loss_avg, best_json_path)
 
         # Save latest val metrics in a json file in the model directory
         last_json_path = os.path.join(model_dir, "metrics_val_last_weights.json")
-        utils.save_dict_to_json(val_metrics, last_json_path)
+        utils.save_dict_to_json(val_loss_avg, last_json_path)
 
 
 
