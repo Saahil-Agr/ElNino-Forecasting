@@ -95,6 +95,8 @@ def main(preprocess_netcdfs=False,
         must be np.uint8 to save PIL jpgs
         if np.uint8 or np.uint32 will trigger scaling of raw data
     """
+    ## needed until xarray 0.11 is released
+    xr.set_options(enable_cftimeindex=True)
     ## interpolate onto common grid and calculate anomalies
     if preprocess_netcdfs:
         print("Preprocessing NetCDF Data")
@@ -106,20 +108,20 @@ def main(preprocess_netcdfs=False,
             rg_fstr = '{}_Amon_{}_{}_{}_{}_%sx%s_anomalies.nc' % (str(X.shape[0]), str(X.shape[1]))
             for gcm_name in gcm_names:
                 for scenario in scenarios[gcm_name]:
-                    ## path for gcm files
-                    gcm_path = join(data_dir, 'GCMs', gcm_name, scenario)
-                    
-                    with xr.set_options(enable_cftimeindex=True):
-                        gcm = xr.open_mfdataset(join(gcm_path, 'raw', '*.nc'))
-
-                    date_strings = [str(date)[:7] for date in gcm['time'].values]
-                    dr = pd.PeriodIndex(date_strings, freq='M')
-                    gcm_grid = (np.asarray(gcm.lat), np.asarray(gcm.lon))
-                    ## for outer loop over 100 years at a time
-                    n_periods = np.ceil((dr[-1].year - dr[0].year) / 100)
-                    year_range = pd.period_range(start=str(dr[0])[:7], periods=n_periods, freq='100A')
-                    for var in channels:
-                        print(var)
+                    for k, var in enumerate(channels):
+                        print(var, gcm_name, scenario)
+                        ## path for gcm files
+                        gcm_path = join(data_dir, 'GCMs', gcm_name, scenario)
+                        ## 
+                        gcm = xr.open_mfdataset(join(gcm_path, 'raw', '{}*.nc'.format(var)))
+                        ## only need to do this once
+                        if k == 0:
+                            date_strings = [str(date)[:7] for date in gcm['time'].values]
+                            dr = pd.PeriodIndex(date_strings, freq='M')
+                            ## for outer loop over 100 years at a time
+                            n_periods = np.ceil((dr[-1].year - dr[0].year) / 100)
+                            year_range = pd.period_range(start=str(dr[0])[:7], periods=n_periods, freq='100A')
+                            gcm_grid = (np.asarray(gcm.lat), np.asarray(gcm.lon))
                         ## preallocate array to store mean values
                         ss = np.zeros(gcm[var][:12,:,:].shape, dtype=np.float64)
                         ## compute anomalies by removing mean for each location for each month
@@ -164,7 +166,7 @@ def main(preprocess_netcdfs=False,
                             fp = join(gcm_path, 'regrid_anomalies', fname)
                             ## save 100 years of regridded anomalies data as .nc file
                             sub_gcm.to_netcdf(fp, mode='w', unlimited_dims=['time'], engine='netcdf4')
-                    gcm.close()
+                        gcm.close()
         print('\nFinished Interpolating')
     ## calculate a timeseries to use as a response variable
     if generate_target:
@@ -212,9 +214,9 @@ def main(preprocess_netcdfs=False,
                             gcm[var] = bits * (gcm[var] - vmin) / vmax
                     ## write image file at each timestep
                     print('\nGenerating images for each timestep')
-                    for t in tqdm(gcm.time):
+                    for i, t in tqdm(enumerate(gcm.time)):
                         ## for each channel load data for timestep t into memory and flip array upright
-                        vals  = [np.flipud(np.asarray(gcm[var].sel(time=t))) for var in channels]
+                        vals  = [np.flipud(np.asarray(gcm[var].isel(time=i))) for var in channels]
                         ## stack channels together and specify data type, shape = (rows, cols, channels)
                         arr = np.stack(vals, axis=-1).astype(img_type)
                         name = img_fstr.format(gcm_name, scenario, str(t.values)[:7])
