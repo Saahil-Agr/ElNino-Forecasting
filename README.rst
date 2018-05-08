@@ -13,6 +13,7 @@ Python 3.6
 .. code-block:: bash
 
     $ pip3 install -r requirements.txt
+    $ pip3 install git+https://github.com/spencerkclark/xarray.git@NetCDFTimeIndex
 
 Data
 ----

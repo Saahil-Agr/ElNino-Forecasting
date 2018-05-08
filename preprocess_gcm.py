@@ -255,7 +255,7 @@ if __name__ == '__main__':
         'CNRM-CM5': ('piControl_r1i1p1',),
     }
     ## these are the variables to work with
-    channels = ['tas']#, 'psl']
+    channels = ['tas', 'uas', 'psl']
     ## variable, latitude range, and longitude range for the target 
     ## Nino3.4 index 
     ## https://www.climate.gov/news-features/blogs/enso/why-are-there-so-many-enso-indexes-instead-just-one
@@ -272,5 +272,6 @@ if __name__ == '__main__':
         scenarios=scenarios,
         channels=channels,
         target=target,
+        img_ext='jpg'
     )
 
