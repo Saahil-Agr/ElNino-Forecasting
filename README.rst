@@ -13,7 +13,7 @@ Python 3.6
 .. code-block:: bash
 
     $ pip3 install -r requirements.txt
-    
+
 Data
 ----
 

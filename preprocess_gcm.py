@@ -9,6 +9,9 @@ file structure
     |-------- raw
     |-------- regrid_anomalies
     |-------- img
+
+right now using bleeding edge version of xarray 
+https://github.com/pydata/xarray/pull/1252
 """
 from os.path import join, split
 
@@ -19,60 +22,6 @@ from scipy.interpolate import InterpolatedUnivariateSpline, RegularGridInterpola
 from tqdm import tqdm
 from PIL import Image
 import dask
-
-
-def map_360_to_365_day_calendar(date_strings):
-    """
-    given dates on a 360 day calendar w/ 30 day months, map to real 365 day calendar
-    :param date_strings:, vector of strings in form "YYYY-MM-DD"
-    :return: pandas.DatetimeIndex
-    """
-    dt = pd.to_datetime(date_strings, errors='coerce')
-    ## TODO handle edge case where first or last date is invalid?
-    start, end = dt[0], dt[-1]
-    dr = pd.date_range(start=start, end=end)
-    ## filter the 29th on leap years
-    f1 = (dr.month == 2) & (dr.day == 29)
-    ## filter 5 31st on other years
-    f2 = (dr.day == 31) & ((dr.month == 1) | (dr.month == 3) | (dr.month == 7) \
-                                          | (dr.month == 10) | (dr.month == 12))
-    ## remove from date range
-    dr = dr.delete(np.where(f1 | f2)[0])
-    ## for most cases the function passes this assertion
-    try:
-        assert len(date_strings) == len(dr)
-    ## this UGLINESS is to catch missing months of data
-    ## eg HadGEM2-ES_historical dataset is missing Nov, 2000
-    except AssertionError:
-        bad_months = {}
-        dt = dt[np.logical_not(np.isnan(dt.year))]
-        ## check if years match
-        for yr in set(dt.year):
-            delta =  np.nansum(dt.year == yr) - np.nansum(dr.year == yr)
-            leap = pd.to_datetime('{:d}-01-01'.format(yr)).is_leap_year
-            if delta != 5 + leap:
-                bad_months[yr] = []
-        for yr in bad_months.keys():
-            ## check if months match
-            for mth in range(1, 13):
-                dt_sum = np.nansum((dt.year == yr) & (dt.month == mth))
-                dr_sum = np.nansum((dr.year == yr) & (dr.month == mth))
-                if mth is 2 and pd.to_datetime('{:d}-01-01'.format(yr)).is_leap_year:
-                    bump = -1
-                elif mth in {5, 8}:
-                    bump = 1
-                else:
-                    bump = 0
-                if dt_sum + bump != dr_sum and dr_sum:
-                    bad_months[yr].append(mth)
-                    print("Expected", dt_sum+bump, "Found", dr_sum)
-                    print("Removing {:d}/{:d}".format(mth, yr))
-        for yr, m_list in bad_months.items():
-            for mth in m_list:
-                inds = np.where((dr.year == yr) & (dr.month == mth))[0]
-                dr = dr.delete(inds)
-        assert len(date_strings) == len(dr)
-    return dr
 
 
 def main(preprocess_netcdfs=False, 
@@ -159,64 +108,63 @@ def main(preprocess_netcdfs=False,
                 for scenario in scenarios[gcm_name]:
                     ## path for gcm files
                     gcm_path = join(data_dir, 'GCMs', gcm_name, scenario)
-                    with xr.open_mfdataset(join(gcm_path, 'raw', '*.nc')) as gcm:
-                        gcm_grid = (np.asarray(gcm.lat), np.asarray(gcm.lon))
-                        # force gcm to 365 day calendar
-                        date_strings = [str(d)[:10] for d in gcm.time.values]
-                        try:
-                            dr = pd.to_datetime(date_strings)
-                        except ValueError:
-                            dr = map_360_to_365_day_calendar(date_strings)
-                        gcm['time'] = dr 
-                        ## for outer loop over 100 years at a time
-                        freq = pd.DateOffset(years=100)
-                        year_range = pd.date_range(dr[0], dr[-1] + freq, freq=freq)
-                        for var in channels:
-                            print(var)
-                            ## preallocate array to store mean values
-                            ss = np.zeros(gcm[var][:12,:,:].shape, dtype=np.float64)
-                            ## compute anomalies by removing mean for each location for each month
-                            for m in range(1, 13):
-                                print('Computing anomalies for month', m)
-                                ## compute the mean value for each month
-                                ss[m-1,:,:] = gcm[var][dr.month == m,:,:].mean(dim='time')
-                            ## iterate in 100 year chunks to keep new .nc file sizes under control
-                            for y0, y1 in zip(year_range[:-1], year_range[1:]):
-                                print('\nInterpolating', var, y0, y1)
-                                filtr = (dr.year >= y0.year) & (dr.year < y1.year)
-                                ## number of timesteps
-                                n_t = np.sum(filtr)
-                                ## output data will be stored here
-                                sub_gcm = xr.DataArray(
-                                    np.zeros((n_t, grid_ds.lat.shape[0], grid_ds.lon.shape[0])),
-                                    coords=[
-                                        ('time', gcm.time[filtr]), 
-                                        ('lat', grid_ds.lat),
-                                        ('lon', grid_ds.lon)
-                                    ]
+                    
+                    with xr.set_options(enable_cftimeindex=True):
+                        gcm = xr.open_mfdataset(join(gcm_path, 'raw', '*.nc'))
+
+                    date_strings = [str(date)[:7] for date in gcm['time'].values]
+                    dr = pd.PeriodIndex(date_strings, freq='M')
+                    gcm_grid = (np.asarray(gcm.lat), np.asarray(gcm.lon))
+                    ## for outer loop over 100 years at a time
+                    n_periods = np.ceil((dr[-1].year - dr[0].year) / 100)
+                    year_range = pd.period_range(start=str(dr[0])[:7], periods=n_periods, freq='100A')
+                    for var in channels:
+                        print(var)
+                        ## preallocate array to store mean values
+                        ss = np.zeros(gcm[var][:12,:,:].shape, dtype=np.float64)
+                        ## compute anomalies by removing mean for each location for each month
+                        for m in range(1, 13):
+                            print('Computing anomalies for month', m)
+                            ## compute the mean value for each month
+                            ss[m-1,:,:] = gcm[var][dr.month == m,:,:].mean(dim='time')
+                        ## iterate in 100 year chunks to keep new .nc file sizes under control
+                        for y0, y1 in zip(year_range[:-1], year_range[1:]):
+                            print('\nInterpolating', var, y0, y1)
+                            filtr = (dr.year >= y0.year) & (dr.year < y1.year)
+                            ## number of timesteps
+                            n_t = np.sum(filtr)
+                            ## output data will be stored here
+                            sub_gcm = xr.DataArray(
+                                np.zeros((n_t, grid_ds.lat.shape[0], grid_ds.lon.shape[0])),
+                                coords=[
+                                    ('time', gcm.time[filtr]), 
+                                    ('lat', grid_ds.lat),
+                                    ('lon', grid_ds.lon)
+                                ]
+                            )
+                            sub_gcm.attrs = gcm[var].attrs
+                            i = np.where(filtr)[0][0]
+                            ## subloop over each month in the 100 year interval
+                            for j in tqdm(range(n_t)):
+                                m = dr[i+j].month
+                                anoms = np.asarray(gcm[var][i+j,:,:]) - ss[m-1,:,:]
+                                ## interpolate gcm to ncar grid
+                                f_interp = RegularGridInterpolator(
+                                    gcm_grid, 
+                                    anoms,
+                                    # bounds_error=False,
+                                    # fill_value=None,
                                 )
-                                sub_gcm.attrs = gcm[var].attrs
-                                i = np.where(filtr)[0][0]
-                                ## subloop over each month in the 100 year interval
-                                for j in tqdm(range(n_t)):
-                                    m = dr[i+j].month
-                                    anoms = np.asarray(gcm[var][i+j,:,:]) - ss[m-1,:,:]
-                                    ## interpolate gcm to ncar grid
-                                    f_interp = RegularGridInterpolator(
-                                        gcm_grid, 
-                                        anoms,
-                                        # bounds_error=False,
-                                        # fill_value=None,
-                                    )
-                                    interp_data = f_interp(xi, method='linear')
-                                    sub_gcm[j,:,:] = interp_data.reshape(Y.shape).T
-                                sub_gcm = sub_gcm.to_dataset(name=var)
-                                sub_gcm.attrs = gcm.attrs
-                                ## path to write out file
-                                fname = rg_fstr.format(var, gcm_name, scenario, str(y0)[:7], str(y1)[:7])
-                                fp = join(gcm_path, 'regrid_anomalies', fname)
-                                ## save 100 years of regridded anomalies data as .nc file
-                                sub_gcm.to_netcdf(fp, mode='w', unlimited_dims=['time'])
+                                interp_data = f_interp(xi, method='linear')
+                                sub_gcm[j,:,:] = interp_data.reshape(Y.shape).T
+                            sub_gcm = sub_gcm.to_dataset(name=var)
+                            sub_gcm.attrs = gcm.attrs
+                            ## path to write out file
+                            fname = rg_fstr.format(var, gcm_name, scenario, str(y0)[:7], str(y1)[:7])
+                            fp = join(gcm_path, 'regrid_anomalies', fname)
+                            ## save 100 years of regridded anomalies data as .nc file
+                            sub_gcm.to_netcdf(fp, mode='w', unlimited_dims=['time'], engine='netcdf4')
+                    gcm.close()
         print('\nFinished Interpolating')
     ## calculate a timeseries to use as a response variable
     if generate_target:
@@ -297,7 +245,7 @@ if __name__ == '__main__':
     ## SETTINGS ##
     ##############
     ## path to the .nc file whose grid we will interpolate onto (the GCM with the coarsest grid)
-    grid_nc = 'GCMs/MPI-ESM-LR/piControl/raw/tas_Amon_MPI-ESM-LR_piControl_r1i1p1_185001-203512.nc'
+    grid_nc = 'GCMs/MPI-ESM-LR/piControl_r1i1p1/raw/tas_Amon_MPI-ESM-LR_piControl_r1i1p1_185001-203512.nc'
     ## these are the GCMs to preprocess
     gcm_names = ['CNRM-CM5']#, 'MPI-ESM-LR', 'CanESM2', 'HadGEM2-ES',]
     ## these are the experiments and forcings settings for each gcm
@@ -305,7 +253,7 @@ if __name__ == '__main__':
         'CNRM-CM5': ('piControl_r1i1p1',),
     }
     ## these are the variables to work with
-    channels = ['tas', 'psl']
+    channels = ['tas']#, 'psl']
     ## variable, latitude range, and longitude range for the target 
     ## Nino3.4 index 
     ## https://www.climate.gov/news-features/blogs/enso/why-are-there-so-many-enso-indexes-instead-just-one
@@ -313,10 +261,10 @@ if __name__ == '__main__':
     ## precipitation over India
     # target = ClimateTarget(name='India_precip', var='pr', lat_range=[10, 25], lon_range=[70, 90])
     main(
-        preprocess_netcdfs=True
+        preprocess_netcdfs=True,
         generate_target=True, 
         write_images=True, 
-        data_dir='.', 
+        data_dir='/Volumes/CLIMATEAI', 
         grid_nc=grid_nc,
         gcm_names=gcm_names,
         scenarios=scenarios,
