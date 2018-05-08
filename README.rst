@@ -10,6 +10,8 @@ Installation
 
 Python 3.6
 
+Currently relies on `a development branch <https://github.com/pydata/xarray/pull/1252>`_ of xarray that provides CFTimeIndex. The pull request seems to have met all requirements and should be included in the next release of xarray.
+
 .. code-block:: bash
 
     $ pip3 install -r requirements.txt
