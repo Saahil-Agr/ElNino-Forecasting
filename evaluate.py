@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 import utils
-import model.net as net
+import model.crnn as net
 import model.data_loader as data_loader
 
 def evaluate(model, loss_fn, dataloader, metrics, params):
