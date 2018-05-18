@@ -11,6 +11,8 @@ import utils
 import model.crnn as crnn
 from model import data_loader
 from evaluate import evaluate
+import matplotlib.pyplot as plt
+import torch.nn as nn
 
 import pandas as pd
 
@@ -34,7 +36,13 @@ def train(model, optimizer, loss_fn, dataloader):
 
             # compute forward pass
             output_batch = model(train_batch)
+
+            #criterion = nn.L1Loss()
+            #loss = criterion(output_batch, labels_batch)
             loss = loss_fn(output_batch, labels_batch)
+
+            # save each batch loss, this can be done also once in a while
+            losses.append(loss.item())
 
             # clear previous gradients, compute gradients of all variables wrt loss
             optimizer.zero_grad()
@@ -43,76 +51,113 @@ def train(model, optimizer, loss_fn, dataloader):
             # performs updates using calculated gradients
             optimizer.step()
 
-            if i % print_every == 0:
-                print('Iteration %d, loss = %.4f' % (i, loss.item()))
-
-
-            # save each batch loss, this can be done also once in a while
-            losses.append(loss.item())
+            # in case you want to print the training loss after every n iterations
+            #if i % print_every == 0:
+              #  print('Iteration %d, loss = %.4f' % (i, loss.item()))
 
 
 
-        # update the average loss
-        #loss_avg = torch.mean(torch.FloatTensor(losses))
-        #logging.info("- Train average loss : " + loss_avg)
-        # t.set_postfix(loss='{:05.3f}'.format(loss_avg()))
-        t.update()
+            # update the average loss
+            #loss_avg = torch.mean(torch.FloatTensor(losses))
+            #logging.info("- Train average loss : " + loss_avg)
+            # t.set_postfix(loss='{:05.3f}'.format(loss_avg()))
 
-        return #loss_avg
+            t.update()
+
+    return np.mean(losses), losses
 
 
-def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_fn, model_dir, epochs,
+def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_fn, epochs,
                        restore_file=None):
 
-    train_losses = []
+    epoch_train_losses = []
+    batch_train_losses = []
     val_losses = []
 
     # reload weights from restore_file if specified
     if restore_file is not None:
-        restore_path = os.path.join(model_dir, restore_file + '.pth.tar')
+        restore_path = os.path.join(checkpoint_dir, restore_file + '.pth.tar')
         logging.info("Restoring parameters from {}".format(restore_path))
-        utils.load_checkpoint(restore_path, crnn_model, optimizer)
+        utils.load_checkpoint(restore_path, model, optimizer)
 
     best_val_loss = float('inf')
+
 
     for epoch in range(epochs):
         # Run one epoch
         logging.info("Epoch {}/{}".format(epoch + 1, epochs))
 
         # compute number of batches in one epoch (one full pass over the training set)
-        loss_avg_epoch = train(model, optimizer, loss_fn, train_dataloader)
-        train_losses.append(loss_avg_epoch)
+        loss_avg_epoch, loss_avg_batch = train(model, optimizer, loss_fn, train_dataloader)
+        epoch_train_losses.append(loss_avg_epoch)
+        batch_train_losses += loss_avg_batch
+
+        logging.info("- Training average loss : " + str(loss_avg_epoch))
 
         # Evaluate for one epoch on validation set
-        '''
-        val_loss_avg = evaluate(model, loss_fn, val_dataloader)
+        val_loss_avg = evaluate(model, loss_fn, val_dataloader, device, dtype)
         val_losses.append(val_loss_avg)
-        is_best = val_loss_avg <=  best_val_loss
+
+        logging.info("- Validation average loss : " + str(val_loss_avg))
+
+        is_best = val_loss_avg <= best_val_loss
+
+        model.eval()
+        error = 0
+        num_samples = 0
+        with torch.no_grad():
+            for x, y in train_dataloader:
+                x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
+                y = y.to(device=device, dtype=dtype)
+                scores = model(x)
+                error += np.sum(np.square(scores.numpy() - y.numpy()))
+                num_samples += scores.shape[0]
+            total_error = float(error) / num_samples
+            print('Got mean train error of ' + str(total_error))
+
+        model.eval()
+        error = 0
+        num_samples = 0
+        with torch.no_grad():
+            for x, y in val_dataloader:
+                x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
+                y = y.to(device=device, dtype=dtype)
+                scores = model(x)
+                error += np.sum(np.square(scores.numpy() - y.numpy()))
+                num_samples += scores.shape[0]
+            total_error = float(error) / num_samples
+            print('Got mean val error of ' + str(total_error))
+
+
+
+
         
         # If best_eval, best_save_path
         if is_best:
-            logging.info("- Found new best accuracy")
+            logging.info("- Found new best evaluation loss")
             best_val_ = val_loss_avg
 
-            # Save best val metrics in a json file in the model directory
-            best_json_path = os.path.join(model_dir, "metrics_val_best_weights.json")
-            utils.save_dict_to_json(val_loss_avg, best_json_path)
+            # Save best val loss in a json file in the checkpoint directory
+            best_val_path = "best_val_loss.txt"
+            utils.save_dict_to_txt(val_loss_avg, results_dir, best_val_path, epoch)
 
-        # Save latest val metrics in a json file in the model directory
-        last_json_path = os.path.join(model_dir, "metrics_val_last_weights.json")
-        utils.save_dict_to_json(val_loss_avg, last_json_path)
-        '''
+        # Save latest val metrics in a json file in the checkpoint directory
+        last_val_path = "last_val_loss.txt"
+        utils.save_dict_to_txt(val_loss_avg, results_dir, last_val_path, epoch)
+
 
         # Save weights
         utils.save_checkpoint({'epoch': epoch + 1,
                                'state_dict': model.state_dict(),
                                'optim_dict' : optimizer.state_dict()},
-                              is_best=None,
-                              checkpoint=model_dir)
+                              is_best=is_best,
+                              checkpoint=checkpoint_dir)
 
 
-
-
+    # plot training history
+    utils.show_train_hist(epoch_train_losses, results_dir, show=True, epoch_plot=True, save=True)
+    utils.show_train_hist(batch_train_losses, results_dir, show=True, epoch_plot=False, save=True)
+    utils.show_train_val_hist(epoch_train_losses, val_losses, results_dir, show=True, save=True)
 
 
 
@@ -134,19 +179,20 @@ if __name__ == '__main__':
     print(input)
     '''
 
-
-
-
     # training hyperparameters
-    batch_size = 128
-    lr = 0.0002
-    epochs = 10
+    batch_size = 64
+    lr = 0.000008
+    epochs = 30
     data_dir = 'data'
     model_dir = 'model'
-
+    checkpoint_dir = 'checkpoint'
+    results_dir = 'results'
+    print('learning rate', lr)
+    print('epochs', epochs)
     #model parameters
     channels = 32
     vector_dim = 1
+    restore_file=None
 
     USE_GPU = True
     dtype = torch.float32
@@ -168,23 +214,26 @@ if __name__ == '__main__':
 
     # Define the model and optimizer
     crnn_model = crnn.CRNN(channels, vector_dim)
-    optimizer = optim.Adam(crnn_model.parameters(), lr=lr, betas=(0.5, 0.999))
 
-    # fetch loss function and metrics
+    optimizer = optim.Adam(crnn_model.parameters(), lr=lr, betas=(0.9, 0.999))
+
+    # fetch loss function
     loss_fn = crnn.loss_fn
 
     # Create the input data pipeline
     logging.info("Loading the datasets...")
 
     # fetch dataloaders
-    dataloaders = data_loader.fetch_dataloader(['train'], data_dir, batch_size)
+    dataloaders = data_loader.fetch_dataloader(['train', 'val'], data_dir, batch_size)
     train_dl = dataloaders['train']
-    val_dl = None
-    #val_dl = dataloaders['val']
+    #val_dl = None
+    val_dl = dataloaders['val']
     #test_dl = dataloaders['test']
 
     logging.info("- done.")
 
     # Train the model
     logging.info("Starting training for {} epoch(s)".format(epochs))
-    train_and_evaluate(crnn_model, train_dl, val_dl, optimizer, loss_fn, model_dir, epochs)
+    train_and_evaluate(crnn_model, train_dl, val_dl, optimizer, loss_fn, epochs, restore_file=restore_file)
+
+
