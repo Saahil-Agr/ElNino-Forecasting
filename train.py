@@ -53,7 +53,7 @@ def train(model, optimizer, loss_fn, dataloader):
 
             # in case you want to print the training loss after every n iterations
             #if i % print_every == 0:
-              #  print('Iteration %d, loss = %.4f' % (i, loss.item()))
+               # print('Iteration %d, loss = %.4f' % (i, loss.item()))
 
 
 
@@ -190,7 +190,7 @@ if __name__ == '__main__':
     print('learning rate', lr)
     print('epochs', epochs)
     #model parameters
-    channels = 32
+    channels = 10
     vector_dim = 1
     restore_file=None
 
@@ -213,7 +213,7 @@ if __name__ == '__main__':
     utils.set_logger(os.path.join(model_dir, 'train.log'))
 
     # Define the model and optimizer
-    crnn_model = crnn.CRNN(channels, vector_dim)
+    crnn_model = crnn.CRNN2(channels, vector_dim)
 
     optimizer = optim.Adam(crnn_model.parameters(), lr=lr, betas=(0.9, 0.999))
 
