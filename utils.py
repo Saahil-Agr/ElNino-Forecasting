@@ -33,12 +33,12 @@ def save_dict_to_txt(loss_to_save, results_dir, path, epoch):
     file = open(os.path.join(results_dir, path),'w')
     file.write('Epoch:' + str(epoch+1) + '. loss' + str(loss_to_save))
 
-    '''
-    with open(json_path, 'w') as f:
-        # We need to convert the values to float for json (it doesn't accept np.array, np.float, )
-        d = {k: float(v) for k, v in d.items()}
-        json.dump(d, f, indent=4)
-    '''
+
+    # with open(json_path, 'w') as f:
+    #     # We need to convert the values to float for json (it doesn't accept np.array, np.float, )
+    #     d = {k: float(v) for k, v in d.items()}
+    #     json.dump(d, f, indent=4)
+
 
 def save_checkpoint(state, is_best, checkpoint):
 
