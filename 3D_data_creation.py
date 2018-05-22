@@ -7,10 +7,10 @@ import pandas as pd
 data_dir = "data/scaled"
 filename = os.listdir(data_dir)
 print(len(filename))
-filenames = [os.path.join(data_dir, f) for f in filename[:430] if f.endswith('.npy')]
-train_dir = "data/3d/train/small_data"
-val_dir = "data/3d/val/small_data"
-test_dir = "data/3d/test"
+filenames = [os.path.join(data_dir, f) for f in filename if f.endswith('.npy')]
+train_dir = "data/3d/train/full_data"
+val_dir = "data/3d/val/full_data"
+test_dir = "data/3d/test/full_data"
 labels_path = os.path.join(data_dir, "{}".format('labels.csv'))
 labels_df = pd.read_csv(labels_path)
 print(filenames[-1])
@@ -18,10 +18,9 @@ print(filenames[-1])
 noOf_files = len(filenames)
 span = 24
 new_No_files = noOf_files - span + 1
-train_no = 300
-val_no = 50
-#test_no = 50
-
+val_no = 800
+test_no = 200
+train_no = new_No_files - test_no - val_no
 test_file = np.load(filenames[0])
 H,W = test_file.shape[0], test_file.shape[1]
 stacked_files = np.empty((noOf_files, H, W))

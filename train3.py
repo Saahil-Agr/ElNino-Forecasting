@@ -186,7 +186,7 @@ if __name__ == '__main__':
     #model parameters
     channels = 10
     vector_dim = 1
-    restore = 'best'
+    restore = None #'best'
     USE_GPU = True
     dtype = torch.float32
     print_every = 1    # iterations before printing
