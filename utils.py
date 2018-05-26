@@ -46,8 +46,8 @@ def save_checkpoint(state, is_best, checkpoint):
     if not os.path.exists(checkpoint):
         print("Checkpoint Directory does not exist! Making directory {}".format(checkpoint))
         os.mkdir(checkpoint)
-
-    torch.save(state, filepath)
+    if not state.get('iter'):
+        torch.save(state, filepath)
     if is_best:
         shutil.copyfile(filepath, os.path.join(checkpoint, 'best.pth.tar'))
 
