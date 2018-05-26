@@ -4,6 +4,7 @@ import pandas as pd
 #import torchvision.transforms as transforms
 #from PIL import Image
 
+dtype = np.float32
 data_dir = "data/scaled"
 filename = os.listdir(data_dir)
 print(len(filename))
@@ -19,11 +20,12 @@ noOf_files = len(filenames)
 span = 24
 new_No_files = noOf_files - span + 1
 val_no = 800
-test_no = 200
+test_no = 400
 train_no = new_No_files - test_no - val_no
 test_file = np.load(filenames[0])
+print(test_file.dtype)
 H,W = test_file.shape[0], test_file.shape[1]
-stacked_files = np.empty((noOf_files, H, W))
+stacked_files = np.empty((noOf_files, H, W), dtype = dtype)
 
 labels_df[span:train_no+span].to_csv(train_dir + "/labels.csv")
 labels_df[train_no+span : train_no+span +val_no].to_csv(val_dir + "/labels.csv")
