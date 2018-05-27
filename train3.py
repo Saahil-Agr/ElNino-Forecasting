@@ -15,16 +15,19 @@ from evaluate import evaluate
 import pandas as pd
 
 
-def train(model, optimizer, loss_fn, dataloader):
+
+def train(model, optimizer, loss_fn, train_dataloader, val_dataloader):
     # set model to training mode
     model.train()
 
     # summary for current training loop and a running average object for loss
     losses = []
-
+    val_loss = []
+    eval_every = 75
+    best_val_loss = float('inf')
     # Use tqdm for progress bar
-    with tqdm(total=len(dataloader)) as t:
-        for i, (train_batch, labels_batch) in enumerate(dataloader):
+    with tqdm(total=len(train_dataloader)) as t:
+        for i, (train_batch, labels_batch) in enumerate(train_dataloader):
 
             model = model.to(device=device)  # move the model parameters to CPU/GPU
             model.train()  # put model to training mode
@@ -48,11 +51,30 @@ def train(model, optimizer, loss_fn, dataloader):
             if i % print_every == 0:
                 print('Iteration %d, loss = %.4f' % (i, loss.item()))
 
-
             # save each batch loss, this can be done also once in a while
             losses.append(loss.item())
+            if i % eval_every == 0:
+                logging.info("- Iteration %d, Evaluating on validation set.." % i)
+                val_loss_avg = evaluate(model, loss_fn, val_dataloader, device, dtype)
+                val_loss.append(val_loss_avg)
 
+                with open("val_loss.txt", "a") as f:
+                    f.write("Iteration {}, loss {} \n".format(i,val_loss_avg))
 
+                logging.info("- Validation average loss : " + str(val_loss_avg))
+                is_best = val_loss_avg <= best_val_loss
+                if is_best:
+                    logging.info("- Found new best accuracy")
+                    best_val_loss = val_loss_avg
+
+                    # Save best val loss in a text file in the checkpoint directory
+                    #best_val_path = "best_val_loss.txt"
+                    #utils.save_dict_to_txt(val_loss_avg, results_dir, best_val_path, epoch)
+                    utils.save_checkpoint({'iter': i,
+                                           'state_dict': model.state_dict(),
+                                           'optim_dict': optimizer.state_dict()},
+                                          is_best=is_best,
+                                          checkpoint=checkpoint_dir)
 
         # update the average loss
         #loss_avg = torch.mean(torch.FloatTensor(losses))
@@ -60,7 +82,7 @@ def train(model, optimizer, loss_fn, dataloader):
         # t.set_postfix(loss='{:05.3f}'.format(loss_avg()))
         t.update()
 
-    return np.mean(losses), losses
+    return np.mean(losses), losses, val_loss
 
 
 def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_fn, epochs,
@@ -69,7 +91,7 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
     epoch_train_losses = []
     batch_train_losses = []
     val_losses = []
-
+    val_losses_batch = []
     # reload weights from restore_file if specified
     if restore_file is not None:
         restore_path = os.path.join(checkpoint_dir, restore_file + '.pth.tar')
@@ -83,9 +105,10 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
         logging.info("Epoch {}/{}".format(epoch + 1, epochs))
 
         # compute number of batches in one epoch (one full pass over the training set)
-        loss_avg_epoch, loss_avg_batch = train(model, optimizer, loss_fn, train_dataloader)
+        loss_avg_epoch, loss_avg_batch, batch_val_loss = train(model, optimizer, loss_fn, train_dataloader, val_dataloader)
         epoch_train_losses.append(loss_avg_epoch)
         batch_train_losses += loss_avg_batch
+        val_losses_batch += batch_val_loss
 
         # Evaluate for one epoch on validation set
         logging.info("- Training average loss : " + str(loss_avg_epoch))
@@ -115,8 +138,8 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
             utils.save_dict_to_txt(val_loss_avg, results_dir, best_val_path, epoch)
 
             # Save best val metrics in a json file in the model directory
-            # best_json_path = os.path.join(model_dir, "metrics_val_best_weights.json")
-            # utils.save_dict_to_json(val_loss_avg, best_json_path)
+            best_json_path = os.path.join(model_dir, "metrics_val_best_weights.json")
+            utils.save_dict_to_json(val_loss_avg, best_json_path)
 
         # Save latest val metrics in a text file in the checkpoint directory
         last_val_path = "last_val_loss.txt"
@@ -149,48 +172,37 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
             print('Got mean val error of ' + str(total_error))
 
         ## plots of losses
-        utils.show_train_hist(epoch_train_losses, results_dir, show=True, epoch_plot=True, save=True)
         utils.show_train_hist(batch_train_losses, results_dir, show=True, epoch_plot=False, save=True)
+        utils.show_train_hist(epoch_train_losses, results_dir, show=True, epoch_plot=True, save=True)
         utils.show_train_val_hist(epoch_train_losses, val_losses, results_dir, show=True, save=True)
 
 
 if __name__ == '__main__':
 
-
+    '''
+    Main file for running the training. Initializes all the required variables and flags
+    '''
     import os
     from PIL import Image
 
-    '''
-    filenames = os.listdir('data/train/3d/small_data')
-    filenames = [os.path.join('data/train/3d/small_data', f) for f in filenames if f.endswith('.npy')]
-    input = np.load(filenames[10])
-    print(type(input))
-    print(input.shape)
-    print(np.min(input))
-    print(np.max(input))
-    print(np.mean(input))
-    print(input)
-    '''
-
-
     # training hyperparameters
-    batch_size = 64
+    batch_size = 128
     lr = 0.0002
-    epochs = 4
+    epochs = 20
     data_dir = 'data/3d'
     model_dir = 'model'
     checkpoint_dir = 'checkpoint'
-    results_dir = 'results'
+    results_dir = '3d_results'
     print('learning rate', lr)
     print('epochs', epochs)
     #model parameters
-    channels = 10
+    channels = 32
     vector_dim = 1
     restore = None #'best'
     USE_GPU = True
     dtype = torch.float32
     print_every = 1    # iterations before printing
-
+    main_dir = os.path.relpath(os.path.dirname(__file__))
     # use GPU if available
     if USE_GPU and torch.cuda.is_available():
         device = torch.device('cuda')
@@ -221,10 +233,8 @@ if __name__ == '__main__':
     val_dl = dataloaders['val']
     #test_dl = dataloaders['test']
 
-    #print(train_dl.dataset[0][0].shape)
-
     logging.info("- done.")
 
     # Train the model
     logging.info("Starting training for {} epoch(s)".format(epochs))
-    train_and_evaluate(Dcnn_model, train_dl, val_dl, optimizer, loss_fn, epochs,restore_file= restore)
+    train_and_evaluate(Dcnn_model, train_dl, val_dl, optimizer, loss_fn, epochs, restore_file = restore)
