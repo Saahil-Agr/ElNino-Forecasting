@@ -4,14 +4,14 @@ import pandas as pd
 #import torchvision.transforms as transforms
 #from PIL import Image
 
-data_dir = "data/scaled"
+data_dir = "data/img_not_scaled"
 filename = os.listdir(data_dir)
 print(len(filename))
 filenames = [os.path.join(data_dir, f) for f in filename if f.endswith('.npy')]
 train_dir = "data/3d/train/full_data"
 val_dir = "data/3d/val/full_data"
 test_dir = "data/3d/test/full_data"
-labels_path = os.path.join(data_dir, "{}".format('labels.csv'))
+labels_path = os.path.join('data', "{}".format('labels.csv'))
 labels_df = pd.read_csv(labels_path)
 print(filenames[-1])
 # required parameters
@@ -19,11 +19,13 @@ noOf_files = len(filenames)
 span = 24
 new_No_files = noOf_files - span + 1
 val_no = 800
-test_no = 200
+test_no = 400
 train_no = new_No_files - test_no - val_no
 test_file = np.load(filenames[0])
+print(test_file.nbytes)
 H,W = test_file.shape[0], test_file.shape[1]
-stacked_files = np.empty((noOf_files, H, W))
+stacked_files = np.zeros((noOf_files, H, W), dtype=np.float16)
+print(stacked_files.nbytes)
 
 labels_df[span:train_no+span].to_csv(train_dir + "/labels.csv")
 labels_df[train_no+span : train_no+span +val_no].to_csv(val_dir + "/labels.csv")
@@ -31,7 +33,7 @@ labels_df[train_no+span + val_no :noOf_files].to_csv(test_dir + "/labels.csv")
 
 #transformer = transforms.Compose([transforms.Resize((64,64))])
 for idx,f in enumerate(filenames):
-    temp_file = np.load(f).reshape((H,W))
+    temp_file = np.load(f).reshape((H,W)).astype('float16')
     #image = Image.fromarray(temp_file,mode = 'L')
     #image = transformer(image)
     #temp_file_resized = np.asanyarray(image, dtype = temp_file.dtype)

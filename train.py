@@ -8,7 +8,7 @@ from torch.autograd import Variable
 from tqdm import tqdm
 
 import utils
-import model.crnn as crnn
+import model.crnn as net
 from model import data_loader
 from evaluate import evaluate
 import matplotlib.pyplot as plt
@@ -183,12 +183,12 @@ if __name__ == '__main__':
     batch_size = 64
     lr = 0.000008
     epochs = 30
-    data_dir = 'data'
     model_dir = 'model'
+    model_name = 'crnn'
     checkpoint_dir = 'checkpoint'
     results_dir = 'results'
-    print('learning rate', lr)
-    print('epochs', epochs)
+    print('learning rate: ', lr)
+    print('epochs: ', epochs)
     #model parameters
     channels = 10
     vector_dim = 1
@@ -212,21 +212,28 @@ if __name__ == '__main__':
     # Set the logger
     utils.set_logger(os.path.join(model_dir, 'train.log'))
 
-    # Define the model and optimizer
-    crnn_model = crnn.CRNN2(channels, vector_dim)
+    # Define the model, dataset and optimizer
+    if model_name == 'cnn':
+        model = net.CNN(channels, vector_dim)
+        data_dir = 'data/2d'
+        logging.info("model: CNN")
+    if model_name == 'crnn':
+        model = net.CRNN(channels, vector_dim)
+        data_dir = 'data/3d'
+        logging.info("model: CRNN")
+    model.apply(net.initialize_weights)
 
-    optimizer = optim.Adam(crnn_model.parameters(), lr=lr, betas=(0.9, 0.999))
+    optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999))
 
     # fetch loss function
-    loss_fn = crnn.loss_fn
+    loss_fn = net.loss_fn
 
     # Create the input data pipeline
     logging.info("Loading the datasets...")
 
     # fetch dataloaders
-    dataloaders = data_loader.fetch_dataloader(['train', 'val'], data_dir, batch_size)
+    dataloaders = data_loader.fetch_dataloader(['train', 'val'], data_dir, batch_size, model_name)
     train_dl = dataloaders['train']
-    #val_dl = None
     val_dl = dataloaders['val']
     #test_dl = dataloaders['test']
 
@@ -234,6 +241,6 @@ if __name__ == '__main__':
 
     # Train the model
     logging.info("Starting training for {} epoch(s)".format(epochs))
-    train_and_evaluate(crnn_model, train_dl, val_dl, optimizer, loss_fn, epochs, restore_file=restore_file)
+    train_and_evaluate(model, train_dl, val_dl, optimizer, loss_fn, epochs, restore_file=restore_file)
 
 
