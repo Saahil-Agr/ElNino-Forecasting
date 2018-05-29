@@ -16,14 +16,14 @@ import pandas as pd
 
 
 
-def train(model, optimizer, loss_fn, train_dataloader, val_dataloader):
+def train(model, optimizer, loss_fn, train_dataloader, val_dataloader,e):
     # set model to training mode
     model.train()
-
+    e += 1
     # summary for current training loop and a running average object for loss
     losses = []
     val_loss = []
-    eval_every = 75
+    eval_every = 50
     best_val_loss = float('inf')
     # Use tqdm for progress bar
     with tqdm(total=len(train_dataloader)) as t:
@@ -49,27 +49,29 @@ def train(model, optimizer, loss_fn, train_dataloader, val_dataloader):
             optimizer.step()
 
             if i % print_every == 0:
-                print('Iteration %d, loss = %.4f' % (i, loss.item()))
+                print('Iteration %d, loss = %.4f \n' % (i+1, loss.item()))
+                with open("train_loss.txt", "a") as f:
+                    f.write("{}, {} \n".format(i+1,loss.item()))
 
             # save each batch loss, this can be done also once in a while
             losses.append(loss.item())
             if i % eval_every == 0:
-                logging.info("- Iteration %d, Evaluating on validation set.." % i)
+                logging.info("- Iteration %d, Evaluating on validation set.. \n" % i)
                 val_loss_avg = evaluate(model, loss_fn, val_dataloader, device, dtype)
                 val_loss.append(val_loss_avg)
 
                 with open("val_loss.txt", "a") as f:
-                    f.write("Iteration {}, loss {} \n".format(i,val_loss_avg))
+                    f.write("Iteration {}, loss {} \n".format(i+1,val_loss_avg))
 
-                logging.info("- Validation average loss : " + str(val_loss_avg))
+                logging.info("- Inermediate Validation loss : " + str(val_loss_avg))
                 is_best = val_loss_avg <= best_val_loss
                 if is_best:
                     logging.info("- Found new best accuracy")
                     best_val_loss = val_loss_avg
 
                     # Save best val loss in a text file in the checkpoint directory
-                    #best_val_path = "best_val_loss.txt"
-                    #utils.save_dict_to_txt(val_loss_avg, results_dir, best_val_path, epoch)
+                    best_val_path = "best_val_loss.txt"
+                    utils.save_dict_to_txt(val_loss_avg, results_dir, best_val_path, iteration = i+1)
                     utils.save_checkpoint({'iter': i,
                                            'state_dict': model.state_dict(),
                                            'optim_dict': optimizer.state_dict()},
@@ -80,7 +82,7 @@ def train(model, optimizer, loss_fn, train_dataloader, val_dataloader):
         #loss_avg = torch.mean(torch.FloatTensor(losses))
         #logging.info("- Train average loss : " + loss_avg)
         # t.set_postfix(loss='{:05.3f}'.format(loss_avg()))
-        t.update()
+            t.update()
 
     return np.mean(losses), losses, val_loss
 
@@ -105,7 +107,7 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
         logging.info("Epoch {}/{}".format(epoch + 1, epochs))
 
         # compute number of batches in one epoch (one full pass over the training set)
-        loss_avg_epoch, loss_avg_batch, batch_val_loss = train(model, optimizer, loss_fn, train_dataloader, val_dataloader)
+        loss_avg_epoch, loss_avg_batch, batch_val_loss = train(model, optimizer, loss_fn, train_dataloader, val_dataloader,epoch)
         epoch_train_losses.append(loss_avg_epoch)
         batch_train_losses += loss_avg_batch
         val_losses_batch += batch_val_loss
@@ -138,8 +140,8 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
             utils.save_dict_to_txt(val_loss_avg, results_dir, best_val_path, epoch)
 
             # Save best val metrics in a json file in the model directory
-            best_json_path = os.path.join(model_dir, "metrics_val_best_weights.json")
-            utils.save_dict_to_json(val_loss_avg, best_json_path)
+            #best_json_path = os.path.join(model_dir, "metrics_val_best_weights.json")
+            #utils.save_dict_to_json(val_loss_avg, best_json_path)
 
         # Save latest val metrics in a text file in the checkpoint directory
         last_val_path = "last_val_loss.txt"
@@ -153,7 +155,7 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
                 x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
                 y = y.to(device=device, dtype=dtype)
                 scores = model(x)
-                error += np.sum(np.square(scores.numpy() - y.numpy()))
+                error += np.sum(np.square(scores.cpu().numpy() - y.cpu().numpy()))
                 num_samples += scores.shape[0]
             total_error = float(error) / num_samples
             print('Got mean train error of ' + str(total_error))
@@ -166,16 +168,17 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
                 x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
                 y = y.to(device=device, dtype=dtype)
                 scores = model(x)
-                error += np.sum(np.square(scores.numpy() - y.numpy()))
+                error += np.sum(np.square(scores.cpu().numpy() - y.cpu().numpy()))
                 num_samples += scores.shape[0]
             total_error = float(error) / num_samples
             print('Got mean val error of ' + str(total_error))
 
         ## plots of losses
-        utils.show_train_hist(batch_train_losses, results_dir, show=True, epoch_plot=False, save=True)
-        utils.show_train_hist(epoch_train_losses, results_dir, show=True, epoch_plot=True, save=True)
-        utils.show_train_val_hist(epoch_train_losses, val_losses, results_dir, show=True, save=True)
-
+       # utils.show_train_hist(batch_train_losses, results_dir, show=False, epoch_plot=False, save=True)
+       # utils.show_train_hist(epoch_train_losses, results_dir, show=False, epoch_plot=True, save=True)
+        #utils.show_train_val_hist(epoch_train_losses, val_losses, results_dir, show=False, save=True)
+    np.save(os.path.join(results_dir,"epoch_avg_trainloss"), epoch_train_losses)
+    np.save(os.path.join(results_dir,"epoch_val_loss"), val_losses)
 
 if __name__ == '__main__':
 
@@ -186,8 +189,8 @@ if __name__ == '__main__':
     from PIL import Image
 
     # training hyperparameters
-    batch_size = 128
-    lr = 0.0002
+    batch_size = 64
+    lr = 0.00001
     epochs = 20
     data_dir = 'data/3d'
     model_dir = 'model'
@@ -198,14 +201,15 @@ if __name__ == '__main__':
     #model parameters
     channels = 32
     vector_dim = 1
-    restore = None #'best'
+    restore = 'best'
     USE_GPU = True
     dtype = torch.float32
-    print_every = 1    # iterations before printing
-    main_dir = os.path.relpath(os.path.dirname(__file__))
+    print_every = 2    # iterations before printing
+    # main_dir = os.path.relpath(os.path.dirname(__file__))
     # use GPU if available
     if USE_GPU and torch.cuda.is_available():
         device = torch.device('cuda')
+        print("ON GPU")
     else:
         device = torch.device('cpu')
 

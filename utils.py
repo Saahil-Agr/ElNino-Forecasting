@@ -24,14 +24,17 @@ def set_logger(log_path):
         logger.addHandler(stream_handler)
 
 
-def save_dict_to_txt(loss_to_save, results_dir, path, epoch):
+def save_dict_to_txt(loss_to_save, results_dir, path, epoch=None,iteration = None):
 
     if not os.path.exists(results_dir):
         print("Results Directory does not exist! Making directory {}".format(results_dir))
         os.mkdir(results_dir)
-
-    file = open(os.path.join(results_dir, path),'w')
-    file.write('Epoch:' + str(epoch+1) + '. loss' + str(loss_to_save))
+    if epoch:
+        file = open(os.path.join(results_dir, path),'w')
+        file.write('Epoch:' + str(epoch+1) + '. loss' + str(loss_to_save))
+    if iteration:
+        with open ("val_loss.txt","a") as f:
+            f.write("Iteration {}, loss {} \n".format(iteration, loss_to_save))
 
 
     # with open(json_path, 'w') as f:

@@ -8,10 +8,10 @@ dtype = np.float32
 data_dir = "data/scaled"
 filename = os.listdir(data_dir)
 print(len(filename))
-filenames = [os.path.join(data_dir, f) for f in filename if f.endswith('.npy')]
-train_dir = "data/3d/train/full_data"
-val_dir = "data/3d/val/full_data"
-test_dir = "data/3d/test/full_data"
+filenames = [os.path.join(data_dir, f) for f in filename[:375] if f.endswith('.npy')]
+train_dir = "data/3d/train/small_data"
+val_dir = "data/3d/val/small_data"
+test_dir = "data/3d/test/small_data"
 labels_path = os.path.join(data_dir, "{}".format('labels.csv'))
 labels_df = pd.read_csv(labels_path)
 print(filenames[-1])
@@ -19,8 +19,8 @@ print(filenames[-1])
 noOf_files = len(filenames)
 span = 24
 new_No_files = noOf_files - span + 1
-val_no = 800
-test_no = 400
+val_no = 50
+test_no = 0#400
 train_no = new_No_files - test_no - val_no
 test_file = np.load(filenames[0])
 print(test_file.dtype)
@@ -29,7 +29,7 @@ stacked_files = np.empty((noOf_files, H, W), dtype = dtype)
 
 labels_df[span:train_no+span].to_csv(train_dir + "/labels.csv")
 labels_df[train_no+span : train_no+span +val_no].to_csv(val_dir + "/labels.csv")
-labels_df[train_no+span + val_no :noOf_files].to_csv(test_dir + "/labels.csv")
+#labels_df[train_no+span + val_no :noOf_files].to_csv(test_dir + "/labels.csv")
 
 #transformer = transforms.Compose([transforms.Resize((64,64))])
 for idx,f in enumerate(filenames):
