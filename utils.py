@@ -5,6 +5,7 @@ import shutil
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 
 def set_logger(log_path):
@@ -34,12 +35,6 @@ def save_dict_to_txt(loss_to_save, results_dir, path, epoch):
     file.write('Epoch:' + str(epoch+1) + '. loss' + str(loss_to_save))
 
 
-    # with open(json_path, 'w') as f:
-    #     # We need to convert the values to float for json (it doesn't accept np.array, np.float, )
-    #     d = {k: float(v) for k, v in d.items()}
-    #     json.dump(d, f, indent=4)
-
-
 def save_checkpoint(state, is_best, checkpoint):
 
     filepath = os.path.join(checkpoint, 'last.pth.tar')
@@ -58,11 +53,21 @@ def load_checkpoint(checkpoint, model, optimizer=None):
         raise("File doesn't exist {}".format(checkpoint))
     checkpoint = torch.load(checkpoint)
     model.load_state_dict(checkpoint['state_dict'])
-
     if optimizer:
         optimizer.load_state_dict(checkpoint['optim_dict'])
-
     return checkpoint
+
+# save training history in csv file:
+def save_history(epoch, train_MSE, val_MSE, train_L1, val_L1, results_dir):
+
+    history_path = os.path.join(results_dir,'loss_history.csv')
+    # if history file doesn't exist yet, create the dataframe with the header:
+    if epoch == 0:
+        history_df = pd.DataFrame(columns=['epoch','trainMSE','valMSE','trainL1','valL1'])
+    else:
+        history_df = pd.read_csv(history_path)
+    history_df.loc[epoch] = [epoch, train_MSE, val_MSE, train_L1, val_L1]
+    history_df.to_csv(history_path, index=False)
 
 # save and show plot of epoch vs loss, or batches vs loss.
 def show_train_hist(train_losses, results_dir, epoch_plot=True, show = False, save = False):

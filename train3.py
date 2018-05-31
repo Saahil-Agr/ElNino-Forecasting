@@ -202,7 +202,7 @@ if __name__ == '__main__':
     USE_GPU = True
     dtype = torch.float32
     print_every = 1    # iterations before printing
-    main_dir = os.path.relpath(os.path.dirname(__file__))
+    #main_dir = os.path.relpath(os.path.dirname(__file__))
     # use GPU if available
     if USE_GPU and torch.cuda.is_available():
         device = torch.device('cuda')

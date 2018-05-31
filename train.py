@@ -1,20 +1,14 @@
-
 import logging
-import os
 import numpy as np
 import torch
 import torch.optim as optim
-from torch.autograd import Variable
 from tqdm import tqdm
-
 import utils
+import model.data_loader as data_loader
 import model.crnn as net
-from model import data_loader
 from evaluate import evaluate
-import matplotlib.pyplot as plt
 import torch.nn as nn
-
-import pandas as pd
+import os
 
 
 def train(model, optimizer, loss_fn, dataloader):
@@ -53,14 +47,7 @@ def train(model, optimizer, loss_fn, dataloader):
 
             # in case you want to print the training loss after every n iterations
             #if i % print_every == 0:
-               # print('Iteration %d, loss = %.4f' % (i, loss.item()))
-
-
-
-            # update the average loss
-            #loss_avg = torch.mean(torch.FloatTensor(losses))
-            #logging.info("- Train average loss : " + loss_avg)
-            # t.set_postfix(loss='{:05.3f}'.format(loss_avg()))
+             #   print('Iteration %d, loss = %.4f' % (i, loss.item()))
 
             t.update()
 
@@ -70,81 +57,49 @@ def train(model, optimizer, loss_fn, dataloader):
 def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_fn, epochs,
                        restore_file=None):
 
-    epoch_train_losses = []
-    batch_train_losses = []
-    val_losses = []
-
     # reload weights from restore_file if specified
     if restore_file is not None:
         restore_path = os.path.join(checkpoint_dir, restore_file + '.pth.tar')
         logging.info("Restoring parameters from {}".format(restore_path))
         utils.load_checkpoint(restore_path, model, optimizer)
 
-    best_val_loss = float('inf')
-
+    best_val_MSE = float('inf')
 
     for epoch in range(epochs):
         # Run one epoch
         logging.info("Epoch {}/{}".format(epoch + 1, epochs))
 
         # compute number of batches in one epoch (one full pass over the training set)
-        loss_avg_epoch, loss_avg_batch = train(model, optimizer, loss_fn, train_dataloader)
-        epoch_train_losses.append(loss_avg_epoch)
-        batch_train_losses += loss_avg_batch
+        train(model, optimizer, loss_fn, train_dataloader)
 
-        logging.info("- Training average loss : " + str(loss_avg_epoch))
+        # Evaluate MSE for one epoch on train and validation set
+        train_MSE = evaluate(model, nn.MSELoss(), train_dataloader, device, dtype)
+        val_MSE = evaluate(model, nn.MSELoss(), val_dataloader, device, dtype)
+        # Evaluate L1 for one epoch on train and validation set
+        train_L1 = evaluate(model, nn.L1Loss(), train_dataloader, device, dtype)
+        val_L1 = evaluate(model, nn.L1Loss(), val_dataloader, device, dtype)
 
-        # Evaluate for one epoch on validation set
-        val_loss_avg = evaluate(model, loss_fn, val_dataloader, device, dtype)
-        val_losses.append(val_loss_avg)
+        # save training history in csv file:
+        utils.save_history(epoch, train_MSE, val_MSE, train_L1, val_L1, results_dir)
 
-        logging.info("- Validation average loss : " + str(val_loss_avg))
+        # print losses
+        logging.info("- Train average MSE loss: " + str(train_MSE))
+        logging.info("- Validation average MSE loss: " + str(val_MSE))
+        logging.info("- Train average L1 error: " + str(train_L1))
+        logging.info("- Validation average L1 error: " + str(val_L1))
 
-        is_best = val_loss_avg <= best_val_loss
-
-        model.eval()
-        error = 0
-        num_samples = 0
-        with torch.no_grad():
-            for x, y in train_dataloader:
-                x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
-                y = y.to(device=device, dtype=dtype)
-                scores = model(x)
-                error += np.sum(np.square(scores.numpy() - y.numpy()))
-                num_samples += scores.shape[0]
-            total_error = float(error) / num_samples
-            print('Got mean train error of ' + str(total_error))
-
-        model.eval()
-        error = 0
-        num_samples = 0
-        with torch.no_grad():
-            for x, y in val_dataloader:
-                x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
-                y = y.to(device=device, dtype=dtype)
-                scores = model(x)
-                error += np.sum(np.square(scores.numpy() - y.numpy()))
-                num_samples += scores.shape[0]
-            total_error = float(error) / num_samples
-            print('Got mean val error of ' + str(total_error))
-
-
-
-
-        
+        # save MSE if is the best
+        is_best = val_MSE <= best_val_MSE
         # If best_eval, best_save_path
         if is_best:
             logging.info("- Found new best evaluation loss")
-            best_val_ = val_loss_avg
-
-            # Save best val loss in a json file in the checkpoint directory
+            # Save best val loss in a txt file in the checkpoint directory
             best_val_path = "best_val_loss.txt"
-            utils.save_dict_to_txt(val_loss_avg, results_dir, best_val_path, epoch)
+            utils.save_dict_to_txt(val_MSE, results_dir, best_val_path, epoch)
 
         # Save latest val metrics in a json file in the checkpoint directory
         last_val_path = "last_val_loss.txt"
-        utils.save_dict_to_txt(val_loss_avg, results_dir, last_val_path, epoch)
-
+        utils.save_dict_to_txt(val_MSE, results_dir, last_val_path, epoch)
 
         # Save weights
         utils.save_checkpoint({'epoch': epoch + 1,
@@ -153,76 +108,68 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
                               is_best=is_best,
                               checkpoint=checkpoint_dir)
 
-
-    # plot training history
-    utils.show_train_hist(epoch_train_losses, results_dir, show=True, epoch_plot=True, save=True)
-    utils.show_train_hist(batch_train_losses, results_dir, show=True, epoch_plot=False, save=True)
-    utils.show_train_val_hist(epoch_train_losses, val_losses, results_dir, show=True, save=True)
-
-
-
 if __name__ == '__main__':
 
+    #directories
+    model_dir = 'model'
+    checkpoint_dir = 'checkpoint'
+    results_dir = 'results'
 
-    import os
-    from PIL import Image
-
-    '''
-    filenames = os.listdir('data/train/img')
-    filenames = [os.path.join('data/train/img', f) for f in filenames if f.endswith('.npy')]
-    input = np.load(filenames[10])
-    print(type(input))
-    print(input.shape)
-    print(np.min(input))
-    print(np.max(input))
-    print(np.mean(input))
-    print(input)
-    '''
+    # choose model
+    model_name = 'cnn'
 
     # training hyperparameters
     batch_size = 64
-    lr = 0.000008
-    epochs = 30
-    model_dir = 'model'
-    model_name = 'crnn'
-    checkpoint_dir = 'checkpoint'
-    results_dir = 'results'
-    print('learning rate: ', lr)
-    print('epochs: ', epochs)
-    #model parameters
+    lr = 0.00001
+    epochs = 3
     channels = 10
-    vector_dim = 1
-    restore_file=None
 
+    # hyperparameters for CRNN
+    vector_dim = 20
+    rnn_hidden_size = 500
+    rnn_num_layers = 2
+
+    # other parameters
+    restore_file=None
     USE_GPU = True
     dtype = torch.float32
     print_every = 1    # iterations before printing
 
+
     # use GPU if available
     if USE_GPU and torch.cuda.is_available():
         device = torch.device('cuda')
+        print('Im using GPU')
     else:
         device = torch.device('cpu')
-
 
     # Set the random seed for reproducible experiments
     torch.manual_seed(230)
     if device == "cuda:0": torch.cuda.manual_seed(230)
 
-    # Set the logger
-    utils.set_logger(os.path.join(model_dir, 'train.log'))
+    # Set the logger, will be saved in the results folder
+    utils.set_logger(os.path.join(results_dir, 'train.log'))
+
+    # print hyperparameters
+    logging.info("learning rate: " + str(lr))
+    logging.info("epochs: " + str(epochs))
+    logging.info("batch size: " + str(batch_size))
+    logging.info("first layer filters: " + str(channels))
 
     # Define the model, dataset and optimizer
     if model_name == 'cnn':
-        model = net.CNN(channels, vector_dim)
+        model = net.CNN(channels)
         data_dir = 'data/2d'
         logging.info("model: CNN")
     if model_name == 'crnn':
-        model = net.CRNN(channels, vector_dim)
+        model = net.CRNN(channels, vector_dim, rnn_hidden_size, rnn_num_layers)
         data_dir = 'data/3d'
         logging.info("model: CRNN")
-    model.apply(net.initialize_weights)
+        logging.info("encoding dimesion: " + str(vector_dim))
+        logging.info("RNN layers: " + str(rnn_num_layers))
+        logging.info("RNN hidden units: " + str(rnn_hidden_size))
 
+    model.apply(net.initialize_weights)
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999))
 
     # fetch loss function

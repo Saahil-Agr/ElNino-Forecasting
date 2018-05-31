@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-def evaluate(model, loss_fn, dataloader, device, dtype):
+def evaluate(model, loss, dataloader, device, dtype):
 
     model.eval()  # set model to evaluation mode
 
@@ -22,10 +22,9 @@ def evaluate(model, loss_fn, dataloader, device, dtype):
 
             # compute model output
             output_val = model(val_batch)
-            criterion = nn.MSELoss()
-            loss = criterion(output_val, labels_val_batch)
-
-            eval_losses.append(loss.item())
+            criterion = loss
+            error = criterion(output_val, labels_val_batch)
+            eval_losses.append(error.item())
 
         loss_avg = np.mean(eval_losses)
 
