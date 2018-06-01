@@ -63,10 +63,10 @@ def save_history(epoch, train_MSE, val_MSE, train_L1, val_L1, results_dir):
     history_path = os.path.join(results_dir,'loss_history.csv')
     # if history file doesn't exist yet, create the dataframe with the header:
     if epoch == 0:
-        history_df = pd.DataFrame(columns=['epoch','trainMSE','valMSE','trainL1','valL1'])
+        history_df = pd.DataFrame(columns=['epoch','trainMSE','valMSE','trainL1','valL1','trainRMSE','valRMSE'])
     else:
         history_df = pd.read_csv(history_path)
-    history_df.loc[epoch] = [epoch, train_MSE, val_MSE, train_L1, val_L1]
+    history_df.loc[epoch] = [epoch, train_MSE, val_MSE, train_L1, val_L1, np.sqrt(train_MSE), np.sqrt(val_MSE)]
     history_df.to_csv(history_path, index=False)
 
 # save and show plot of epoch vs loss, or batches vs loss.

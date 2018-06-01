@@ -85,8 +85,6 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
         # print losses
         logging.info("- Train average MSE loss: " + str(train_MSE))
         logging.info("- Validation average MSE loss: " + str(val_MSE))
-        logging.info("- Train average L1 error: " + str(train_L1))
-        logging.info("- Validation average L1 error: " + str(val_L1))
 
         # save MSE if is the best
         is_best = val_MSE <= best_val_MSE
@@ -116,12 +114,12 @@ if __name__ == '__main__':
     results_dir = 'results'
 
     # choose model
-    model_name = 'cnn'
+    model_name = 'crnn'
 
     # training hyperparameters
     batch_size = 64
     lr = 0.00001
-    epochs = 3
+    epochs = 30
     channels = 10
 
     # hyperparameters for CRNN
@@ -148,6 +146,8 @@ if __name__ == '__main__':
     if device == "cuda:0": torch.cuda.manual_seed(230)
 
     # Set the logger, will be saved in the results folder
+    if not os.path.exists(results_dir):
+        os.mkdir(results_dir)
     utils.set_logger(os.path.join(results_dir, 'train.log'))
 
     # print hyperparameters
