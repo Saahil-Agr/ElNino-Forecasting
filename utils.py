@@ -3,6 +3,8 @@ import logging
 import os
 import shutil
 import torch
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -25,15 +27,14 @@ def set_logger(log_path):
         logger.addHandler(stream_handler)
 
 
-def save_dict_to_txt(loss_to_save, results_dir, path, epoch):
+def save_dict_to_txt(loss_to_save, results_dir, path, epoch = None):
 
     if not os.path.exists(results_dir):
         print("Results Directory does not exist! Making directory {}".format(results_dir))
         os.mkdir(results_dir)
-
-    file = open(os.path.join(results_dir, path),'w')
-    file.write('Epoch:' + str(epoch+1) + '. loss' + str(loss_to_save))
-
+    if epoch:
+        file = open(os.path.join(results_dir, path),'a')
+        file.write('Epoch:' + str(epoch+1) + '. loss' + str(loss_to_save))
 
 def save_checkpoint(state, is_best, checkpoint):
 
@@ -44,14 +45,14 @@ def save_checkpoint(state, is_best, checkpoint):
     if not state.get('iter'):
         torch.save(state, filepath)
     if is_best:
-        shutil.copyfile(filepath, os.path.join(checkpoint, 'best.pth.tar'))
+        torch.save(state, os.path.join(checkpoint, 'best.pth.tar'))
 
 
 def load_checkpoint(checkpoint, model, optimizer=None):
 
     if not os.path.exists(checkpoint):
         raise("File doesn't exist {}".format(checkpoint))
-    checkpoint = torch.load(checkpoint)
+    checkpoint = torch.load(checkpoint, map_location=lambda storage, loc:storage)
     model.load_state_dict(checkpoint['state_dict'])
     if optimizer:
         optimizer.load_state_dict(checkpoint['optim_dict'])

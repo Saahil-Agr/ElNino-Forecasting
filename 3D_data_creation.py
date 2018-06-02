@@ -4,6 +4,7 @@ import pandas as pd
 #import torchvision.transforms as transforms
 #from PIL import Image
 
+<<<<<<< Updated upstream
 
 dtype = np.float32
 data_dir = "data/scaled"
@@ -14,14 +15,27 @@ train_dir = "data/3d/train/full_data"
 val_dir = "data/3d/val/full_data"
 test_dir = "data/3d/test/full_data"
 labels_path = os.path.join('data', "{}".format('labels.csv'))
+=======
+dtype = np.float16
+data_dir = "data/raw_img"
+filename = sorted(os.listdir(data_dir))
+print(len(filename))
+filenames = [os.path.join(data_dir, f) for f in filename if f.endswith('.npy')]
+print(filenames[:20])
+train_dir = "data/3d_raw/train/small_data"
+val_dir = "data/3d_raw/val/small_data"
+test_dir = "data/3d_raw/test/small_data"
+labels_path = os.path.join(data_dir, "{}".format('labels.csv'))
+>>>>>>> Stashed changes
 labels_df = pd.read_csv(labels_path)
 print(filenames[-1])
+print(labels_df.head())
 # required parameters
 noOf_files = len(filenames)
 span = 24
 new_No_files = noOf_files - span + 1
-val_no = 800
-test_no = 400
+val_no = 50
+test_no = 0#400
 train_no = new_No_files - test_no - val_no
 test_file = np.load(filenames[0])
 print(test_file.dtype)

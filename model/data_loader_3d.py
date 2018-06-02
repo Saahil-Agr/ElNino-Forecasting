@@ -24,10 +24,10 @@ class ClimateDataset(Dataset):
 
     def __init__(self, data_dir, transform):
 
-        self.images_path = os.path.join(data_dir, "{}".format('full_data'))
-        self.labels_path = os.path.join(data_dir, "{}".format('full_data/labels.csv'))
+        self.images_path = os.path.join(data_dir, "{}".format('small_data'))
+        self.labels_path = os.path.join(data_dir, "{}".format('small_data/labels.csv'))
 
-        self.filenames = os.listdir(self.images_path)
+        self.filenames = sorted(os.listdir(self.images_path))
         self.filenames = [os.path.join(self.images_path, f) for f in self.filenames if f.endswith('.npy')]
 
         labels_df = pd.read_csv(self.labels_path)
