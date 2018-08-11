@@ -33,6 +33,7 @@ class ThreeDCNN(nn.Module):
         nn.init.kaiming_normal_(self.conv6.weight)
 
         self.fc = nn.Linear(channels*32, vector_dim)
+        self.dropout = nn.Dropout3d(p=0.2)
         nn.init.kaiming_normal_(self.fc.weight)
 
         # weight initialization
@@ -46,25 +47,15 @@ class ThreeDCNN(nn.Module):
     def forward(self, input):
         #print(input.shape)
         x = F.relu(self.conv1(input))
-        #print("conv1",x.shape)
         x = F.relu(self.conv2_bn(self.conv2(x)))
-        #print("conv2", x.shape)
         x = F.relu(self.conv3_bn(self.conv3(x)))
-        #print("conv3", x.shape)
-        x = F.relu(self.conv4_bn(self.conv4(x)))
-        #print("conv4", x.shape)
-        x = F.relu(self.conv5_bn(self.conv5(x)))
-        #print("conv5", x.shape)
-        x = F.relu(self.conv6(x))
-        #print("conv6", x.shape)
+        x = F.relu(self.dropout(self.conv4_bn(self.conv4(x))))
+        x = F.relu(self.dropout(self.conv5_bn(self.conv5(x))))
+        x = F.relu(self.dropout(self.conv6(x)))
 
         # resize tensor to fit the FC
         x = x.view(x.size()[0], -1)
         x = self.fc(x)
-
-        # lstm inputs: 3D, 1st sequence (time_steps), 2nd minibatch instances, 3rd elements of the inputs (vectors of each time_step).
-        #lstm1_out, hidden_state1 = self.lstm1(input, (h0, c0))
-        #lstm2_out, hidden_state2 = self.lstm2(input, (h0, c0))
 
         #print("x.view",x.view(-1))
         return x.view(-1) #lstm1_out
