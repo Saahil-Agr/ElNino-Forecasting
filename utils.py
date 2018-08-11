@@ -51,22 +51,25 @@ def load_checkpoint(checkpoint, model, optimizer=None):
 
     if not os.path.exists(checkpoint):
         raise("File doesn't exist {}".format(checkpoint))
-    checkpoint = torch.load(checkpoint)
+    if torch.cuda.is_available():
+        checkpoint = torch.load(checkpoint, map_location='gpu')
+    else:
+        checkpoint = torch.load(checkpoint, map_location='cpu')
     model.load_state_dict(checkpoint['state_dict'])
     if optimizer:
         optimizer.load_state_dict(checkpoint['optim_dict'])
     return checkpoint
 
 # save training history in csv file:
-def save_history(epoch, train_MSE, val_MSE, train_L1, val_L1, results_dir):
+def save_history(epoch, train_MSE, val_MSE, test_MSE, train_L1, val_L1, results_dir):
 
     history_path = os.path.join(results_dir,'loss_history.csv')
     # if history file doesn't exist yet, create the dataframe with the header:
     if epoch == 0:
-        history_df = pd.DataFrame(columns=['epoch','trainMSE','valMSE','trainL1','valL1','trainRMSE','valRMSE'])
+        history_df = pd.DataFrame(columns=['epoch','trainMSE','valMSE','trainL1','valL1','trainRMSE','valRMSE', 'testRMSE'])
     else:
         history_df = pd.read_csv(history_path)
-    history_df.loc[epoch] = [epoch, train_MSE, val_MSE, train_L1, val_L1, np.sqrt(train_MSE), np.sqrt(val_MSE)]
+    history_df.loc[epoch] = [epoch+1, train_MSE, val_MSE, train_L1, val_L1, np.sqrt(train_MSE), np.sqrt(val_MSE), np.sqrt(test_MSE)]
     history_df.to_csv(history_path, index=False)
 
 # save and show plot of epoch vs loss, or batches vs loss.
@@ -116,3 +119,5 @@ def show_train_val_hist(train_losses, val_losses, results_dir, show=True, save=T
         plt.show()
     else:
         plt.close()
+
+
